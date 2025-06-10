@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Assistive Object Detector</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Poppins', sans-serif;
+      background-color: #f4f4f9;
+      color: #333;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: auto;
+      padding: 20px;
+      text-align: center;
+    }
+
+    h1 {
+      color: #4b4bff;
+      margin-bottom: 20px;
+    }
+
+    video {
+      width: 100%;
+      max-width: 480px;
+      border-radius: 12px;
+      border: 2px solid #ccc;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    button {
+      margin-top: 20px;
+      background: #4b4bff;
+      border: none;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background 0.3s;
+    }
+
+    button:hover {
+      background: #3838d6;
+    }
+
+    .info-panel {
+      margin-top: 30px;
+      background: #fff;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+      text-align: left;
+    }
+
+    .info-panel h2 {
+      color: #333;
+    }
+
+    .info-panel p {
+      font-size: 16px;
+      margin-top: 5px;
+    }
+
+    #loader {
+      display: none;
+      margin-top: 10px;
+      font-size: 14px;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Assistive Object Detector</h1>
+    <video id="userVideo" autoplay playsinline></video>
+    <canvas id="canvas" style="display:none;"></canvas>
+    <button onclick="captureAndSend()">📸 Capture & Describe</button>
+    <div id="loader">Processing image, please wait...</div>
+
+    <div class="info-panel">
+      <h2>📝 Detected Caption</h2>
+      <p id="caption">Waiting for capture...</p>
+      <button onclick="playAudio()">🔊 Play Description</button>
+    </div>
+  </div>
+
+  <script>
+    let audioURL = "";
+    let stream;
+
+    function startCamera() {
+      const video = document.getElementById('userVideo');
+      const constraints = {
+        video: { facingMode: { exact: "environment" } },
+        audio: false
+      };
+
+      navigator.mediaDevices.getUserMedia(constraints)
+        .then(s => {
+          stream = s;
+          video.srcObject = stream;
+        })
+        .catch(err => {
+          console.warn("Back camera not available, trying front...", err);
+          navigator.mediaDevices.getUserMedia({ video: true })
+            .then(s => {
+              stream = s;
+              video.srcObject = stream;
+            })
+            .catch(e => {
+              alert("Camera access is required.");
+              console.error("No camera access:", e);
+            });
+        });
+    }
+
+    function captureAndSend() {
+      const loader = document.getElementById("loader");
+      loader.style.display = "block";
+
+      const video = document.getElementById('userVideo');
+      const canvas = document.getElementById('canvas');
+      const context = canvas.getContext('2d');
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      canvas.toBlob(blob => {
+        const formData = new FormData();
+        formData.append('frame', blob, 'frame.jpg');
+
+        fetch('/upload_frame', {
+          method: 'POST',
+          body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+          loader.style.display = "none";
+          document.getElementById("caption").innerText = data.caption;
+          audioURL = data.audio_url;
+        })
+        .catch(err => {
+          loader.style.display = "none";
+          console.error("Upload failed:", err);
+        });
+      }, 'image/jpeg');
+    }
+
+    function playAudio() {
+      if (audioURL) {
+        const audio = new Audio(audioURL);
+        audio.play();
+      }
+    }
+
+    window.onload = startCamera;
+  </script>
+</body>
+</html>
